@@ -64,3 +64,17 @@ Table fact_company_year {
  Note: 'Grain: one row per company per calendar year (one selected report per company-year)'
 }
 ```
+## SQL
+
+PostgreSQL. Table definitions follow the data dictionary in Section 6 of the report.
+
+| File | Purpose |
+|---|---|
+| `sql/ddl/01_create_star_schema.sql` | CREATE TABLE statements for the fact table and four dimensions, plus seed rows for `dim_year` and `dim_size_band` |
+| `sql/queries/q1_median_revenue_growth_by_industry.sql` | Q1. Industries with the highest median revenue growth |
+| `sql/queries/q2_median_operating_margin_by_industry.sql` | Q2. Industries with the highest median operating margin |
+| `sql/queries/q3_revenue_per_employee_by_size_band.sql` | Q3. Revenue per employee by employee size band |
+| `sql/queries/q4_median_operating_margin_by_size_band.sql` | Q4. Median operating margin by company size |
+| `sql/queries/q5_revenue_up_margin_down.sql` | Q5. Companies that grew revenue while their margin declined |
+
+Query conventions, following the KPI rules in Section 1: every ratio requires a positive denominator, sector comparisons use medians, every result shows its sample size, and groups with fewer than 30 companies are excluded. Year over year queries (Q1, Q5) partition by `registry_code` rather than `company_key`, because `dim_company` is SCD Type 2 and a company can receive a new surrogate key when its attributes change.
