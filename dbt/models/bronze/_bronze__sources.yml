@@ -2,7 +2,11 @@
 # Column list and original RIK headers: docs/bronze_tables.md and scripts/bronze_schema.py.
 # All columns are String. Tables are ReplacingMergeTree(_loaded_at): in silver, read them with FINAL,
 # e.g.  select ... from {{ source('bronze', 'rik_report_general') }} final
-# Only two smoke tests live here; the data-quality tests are Melih's.
+#
+# Tests (Melih, see docs/data_quality.md). Bronze is raw, so most checks here are warnings: they describe
+# the source, they do not stop the pipeline. The checks that must stop it run earlier, in the Airflow task
+# dq_check_bronze (scripts/dq_bronze.py), before dbt is triggered.
+# dbt_expectations regex tests use the ClickHouse version of regexp_instr in macros/dbt_expectations_clickhouse.sql.
 version: 2
 
 sources:
@@ -12,17 +16,104 @@ sources:
     tables:
       - name: rik_report_general
         description: "1.aruannete_yldandmed: one row per annual report (no company name in this file)."
+        data_tests:
+          - dbt_expectations.expect_table_row_count_to_be_between:
+              arguments:
+                min_value: 1
         columns:
           - name: report_id
             data_tests:
               - not_null
+              - dbt_expectations.expect_column_values_to_match_regex:
+                  arguments:
+                    regex: "^[0-9]+$"
+                  config: {severity: warn}
+          - name: registrikood
+            description: Estonian registry code, 8 digits.
+            data_tests:
+              - dbt_expectations.expect_column_values_to_match_regex:
+                  arguments:
+                    regex: "^[0-9]{8}$"
+                  config: {severity: warn}
+          - name: aruandeaasta
+            description: Report year as text.
+            data_tests:
+              - dbt_expectations.expect_column_values_to_match_regex:
+                  arguments:
+                    regex: "^[0-9]{4}$"
+                  config: {severity: warn}
+          - name: period_end
+            description: End of the reporting period, dd.mm.yyyy.
+            data_tests:
+              - dbt_expectations.expect_column_values_to_match_regex:
+                  arguments:
+                    regex: "^[0-9]{2}[.][0-9]{2}[.][0-9]{4}$"
+                  config: {severity: warn}
+
       - name: rik_report_elements
         description: "4.<year>_aruannete_elemendid: long format, one row per report x tabel x element; partitioned by report_year."
+        data_tests:
+          - dbt_expectations.expect_table_row_count_to_be_between:
+              arguments:
+                min_value: 1
+        columns:
+          - name: report_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('bronze', 'rik_report_general')
+                    field: report_id
+                  config: {severity: warn}
+          - name: report_year
+            data_tests:
+              - dbt_expectations.expect_column_values_to_be_between:
+                  arguments:
+                    min_value: 2000
+                    max_value: 2100
+          - name: vaartus
+            description: Value as text with '.' decimals; must parse as a number in silver.
+            data_tests:
+              - dbt_expectations.expect_column_values_to_match_regex:
+                  arguments:
+                    regex: "^-?[0-9]+([.][0-9]+)?$"
+                  config: {severity: warn}
+
       - name: rik_report_emtak_revenue
         description: "2.EMTAK_myygitulu: revenue split by EMTAK code per report."
+        columns:
+          - name: report_id
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('bronze', 'rik_report_general')
+                    field: report_id
+                  config: {severity: warn}
+          - name: emtak
+            description: EMTAK activity code as text, leading zeros kept.
+            data_tests:
+              - dbt_expectations.expect_column_values_to_match_regex:
+                  arguments:
+                    regex: "^[0-9]{4,5}$"
+                  config: {severity: warn}
+          - name: pohitegevusala
+            description: "'jah' marks the main activity of the report."
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['jah', 'ei']
+                  config: {severity: warn}
+
       - name: rik_company_basic
         description: "ettevotja_rekvisiidid__lihtandmed: one row per company, current state only (name, legal form, address)."
+        data_tests:
+          - dbt_expectations.expect_table_row_count_to_be_between:
+              arguments:
+                min_value: 1
         columns:
           - name: ariregistri_kood
             data_tests:
               - not_null
+              - unique:
+                  config: {severity: warn}   # ReplacingMergeTree: a plain INSERT reload can show a copy until merged

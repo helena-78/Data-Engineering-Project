@@ -9,6 +9,12 @@ require-dbt-version: [">=1.8.0", "<2.0.0"]
 
 profile: observatory
 
+# Our own ClickHouse versions of package macros (macros/dbt_expectations_clickhouse.sql) win over the
+# package defaults.
+dispatch:
+  - macro_namespace: dbt_expectations
+    search_order: ["observatory", "dbt_expectations"]
+
 model-paths: ["models"]
 seed-paths: ["seeds"]
 snapshot-paths: ["snapshots"]

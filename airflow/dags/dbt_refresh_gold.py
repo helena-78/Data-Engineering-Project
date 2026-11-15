@@ -8,8 +8,10 @@ Not scheduled. It is started by the ingestion DAGs after bronze is loaded and ch
 or by hand in the UI ("Trigger DAG w/ config") / CLI:
     airflow dags trigger dbt_refresh_gold --conf '{"full_refresh": true}'
 
-Tasks: dbt_deps >> dbt_seed >> dbt_snapshot >> dbt_run >> dbt_test
+Tasks: dbt_deps >> dbt_seed >> dbt_snapshot >> dbt_run >> dbt_test >> run_queries
   * full_refresh=true adds --full-refresh to seed and run (rebuilds incremental models such as the fact).
+  * run_queries (Melih) runs Q1 to Q5 (sql/queries/*.sql) on gold and writes DATA_DIR/query_results.md
+    (host: ./data/query_results.md). It is skipped while gold.fact_company_year does not exist yet.
   * The DAG only calls dbt; which models exist is decided by the dbt project, so it works while
     silver/gold are still empty and keeps working as models, seeds and snapshots are added.
 
@@ -28,6 +30,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.models.param import Param
 from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
 
 DBT_PROJECT_DIR = os.environ.get("DBT_PROJECT_DIR", "/opt/airflow/dbt")
 DBT_PROFILES_DIR = os.environ.get("DBT_PROFILES_DIR", DBT_PROJECT_DIR)
@@ -44,6 +47,32 @@ DBT_ENV = {
 DBT = f'"{DBT_BIN}" --no-use-colors'
 DIRS = '--project-dir "$DBT_PROJECT_DIR" --profiles-dir "$DBT_PROFILES_DIR"'
 FULL_REFRESH = "{{ '--full-refresh' if params.full_refresh else '' }}"
+
+SCRIPTS_DIR = os.environ.get("SCRIPTS_DIR", "/opt/airflow/scripts")
+DATA_DIR = os.environ.get("DATA_DIR", "/opt/airflow/data")
+
+
+def run_queries(**_context) -> str:
+    """Q1 to Q5 on gold (scripts/run_queries.py, owner: Melih). Skipped until the fact table exists."""
+    import sys
+    from pathlib import Path
+
+    from airflow.exceptions import AirflowSkipException
+
+    if SCRIPTS_DIR not in sys.path:
+        sys.path.insert(0, SCRIPTS_DIR)
+    import load_bronze  # noqa: E402
+    import run_queries as rq  # noqa: E402
+
+    client = load_bronze.get_client()
+    if not int(client.command("EXISTS TABLE gold.fact_company_year")):
+        raise AirflowSkipException("gold.fact_company_year does not exist yet")
+    out = Path(DATA_DIR) / "query_results.md"
+    rq.main(["--out", str(out)])
+    text = out.read_text(encoding="utf-8")
+    print(text)
+    return str(out)
+
 
 default_args = {
     "owner": "ege",
@@ -115,4 +144,10 @@ with DAG(
         retries=0,  # a failing data test is a real result, retrying does not help
     )
 
-    dbt_deps >> dbt_seed >> dbt_snapshot >> dbt_run >> dbt_test
+    query_results = PythonOperator(
+        task_id="run_queries",
+        python_callable=run_queries,
+        retries=0,
+    )
+
+    dbt_deps >> dbt_seed >> dbt_snapshot >> dbt_run >> dbt_test >> query_results

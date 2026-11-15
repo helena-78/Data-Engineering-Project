@@ -9,9 +9,11 @@ Input, inside the containers (host folder ./data is mounted at DATA_DIR, default
 
 Tasks:
   load_bronze_sample        scripts/load_bronze.py (header check, CSV parsing, partition replace -> idempotent)
+  dq_check_bronze           scripts/dq_bronze.py (Melih): fails the run on missing columns, empty tables,
+                            missing years, empty or duplicate report_id; dbt is not triggered then
   trigger_dbt_refresh_gold  TriggerDagRunOperator(trigger_dag_id="dbt_refresh_gold")
 
-Olena's ingestion DAGs follow the same pattern for the full files (DATA_DIR/raw), with Melih's
+Olena's ingestion DAGs follow the same pattern for the full files (DATA_DIR/raw), with the same
 data-quality task between the load and the trigger (see docs/pipeline_contracts.md).
 """
 
@@ -51,6 +53,15 @@ def load_bronze_sample(**_context) -> list:
     return results
 
 
+def dq_check_bronze(**context) -> list:
+    """Data-quality checks on bronze (scripts/dq_bronze.py). Uses the loader stats of load_bronze_sample."""
+    if str(SCRIPTS_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS_DIR))
+    import dq_bronze  # noqa: E402
+
+    return dq_bronze.run_dq_task(upstream_task_ids=["load_bronze_sample"], **context)
+
+
 with DAG(
     dag_id="bronze_sample_load",
     description="Load data/sample (RIK sample) into ClickHouse bronze, then trigger dbt_refresh_gold",
@@ -64,6 +75,9 @@ with DAG(
 ) as dag:
     load = PythonOperator(task_id="load_bronze_sample", python_callable=load_bronze_sample)
 
+    # retries=0: a failed data-quality check is a real result, retrying does not change the data
+    dq = PythonOperator(task_id="dq_check_bronze", python_callable=dq_check_bronze, retries=0)
+
     trigger = TriggerDagRunOperator(
         task_id="trigger_dbt_refresh_gold",
         trigger_dag_id="dbt_refresh_gold",
@@ -71,4 +85,4 @@ with DAG(
         wait_for_completion=False,
     )
 
-    load >> trigger
+    load >> dq >> trigger

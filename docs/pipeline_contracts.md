@@ -60,6 +60,19 @@ RIK zips ──> [Olena] ingestion DAG(s): download + load bronze ──> [Melih
 - dbt_expectations: add it to `dbt/packages.yml`, run `docker compose run --rm dbt deps` once (updates `package-lock.yml`),
   commit both files and run `docker compose build`, because the packages are baked into the image.
 - Q1/Q5: partition year-over-year windows by `company_id` (durable, stored in the fact), not by `company_key`.
+- **Delivered (Melih, 15 Nov):** `scripts/dq_bronze.py` (task `dq_check_bronze`, already wired into
+  `bronze_sample_load`), bronze source tests with `dbt_expectations` (`metaplane/dbt_expectations` added to
+  `packages.yml`), gold and cross-layer singular tests in `dbt/tests/gold/` and `dbt/tests/cross_layer/`,
+  Q1 to Q5 in `sql/queries/`, `scripts/run_queries.py` (task `run_queries` at the end of `dbt_refresh_gold`,
+  writes `data/query_results.md`; `./sql` is now mounted at `/opt/airflow/sql`). Details and how to add the
+  check to an ingestion DAG: `docs/data_quality.md`.
+- **Olena:** in each ingestion DAG put `dq_check_bronze` after all load tasks and before the trigger and pass
+  the load task ids (`docs/data_quality.md`, section 1). The load tasks must return the `load_file` /
+  `load_directory` stats (that is their XCom), otherwise the duplicate check reports `skipped`.
+- **Gabriel, Kristjan:** the gold tests use the column names listed in `docs/data_quality.md` ("Names the
+  tests rely on"). They are skipped with a warning until your models exist. Note for silver:
+  `EmployeeExpense` in `Kasumiaruanne skeem 1` is negative (expenses carry a minus sign), and `TotalProfitLoss`
+  also appears in `Rahavoogude aruanne kaudsel meetodil` (cash flow), so filter on `tabel`.
 
 ## Kristjan (dimensions) and Gabriel (silver, fact)
 

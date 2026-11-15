@@ -6,7 +6,7 @@
 #   docker compose run --rm dbt debug
 #
 # All credentials and container paths come from .env; nothing secret is written in this file.
-# Host folders mounted into Airflow: ./airflow/dags, ./dbt, ./scripts, ./data, ./clickhouse/init.
+# Host folders mounted into Airflow: ./airflow/dags, ./dbt, ./scripts, ./data, ./clickhouse/init, ./sql.
 
 x-airflow-env: &airflow-env
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -48,6 +48,7 @@ x-airflow-common: &airflow-common
     - ./scripts:${SCRIPTS_DIR}
     - ./data:${DATA_DIR}
     - ./clickhouse/init:${CLICKHOUSE_INIT_DIR}:ro
+    - ./sql:/opt/airflow/sql:ro      # analytical queries Q1 to Q5, run after dbt_test (run_queries task)
     - airflow-logs:/opt/airflow/logs
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on: &airflow-depends-on
