@@ -53,3 +53,10 @@ Bronze: general 1,959 reports / 587 companies, elements 6,880 / 7,170 / 7,572 / 
 emtak 1,778, basic 537; no company has more than one report per `aruandeaasta`; Estonian letters intact.
 
 Not tested: Linux/macOS hosts (set `AIRFLOW_UID` on Linux) and downloads from RIK (Olena's DAGs).
+
+## Data-quality checks, dbt tests and queries (Melih)
+
+`tests/test_dq_unit.py` (unit tests, part of the command above). The integration runs (Airflow 2.10.5
+`dags test` of both DAGs, dbt build and test, queries, deliberately broken data) are described in
+`docs/data_quality.md`, section "How it was tested".
+

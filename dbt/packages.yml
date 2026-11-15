@@ -4,3 +4,7 @@
 packages:
   - package: dbt-labs/dbt_utils
     version: [">=1.4.0", "<1.5.0"]   # tested with 1.4.1
+  # Data-quality tests (Melih): expect_table_row_count_to_be_between, expect_column_values_to_be_between,
+  # expect_column_values_to_match_regex. Pulls in godatadriven/dbt_date. Tested with 0.10.10.
+  - package: metaplane/dbt_expectations
+    version: [">=0.10.0", "<0.11.0"]
