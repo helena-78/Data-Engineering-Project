@@ -1,0 +1,33 @@
+# secrets
+.env
+
+# data: large RIK downloads stay local; sample CSVs are re-created from the bundle
+data/raw/*
+!data/raw/.gitkeep
+data/sample/*.csv
+data/sample/_*.txt
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+
+# Airflow / Python
+logs/
+airflow/logs/
+__pycache__/
+*.pyc
+.venv/
+venv*/
+.pytest_cache/
+
+# editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# docker smoke test output
+docker_smoke_test.log
+data/_smoke/

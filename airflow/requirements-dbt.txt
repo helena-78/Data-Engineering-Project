@@ -1,0 +1,4 @@
+# Installed into a SEPARATE virtualenv (/opt/dbt-venv) so dbt's dependencies cannot conflict with Airflow's.
+# Versions tested locally against ClickHouse 26.8 (see tests/README.md).
+dbt-core==1.11.17
+dbt-clickhouse==1.10.3

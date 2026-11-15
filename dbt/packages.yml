@@ -1,0 +1,6 @@
+# Baked into the Docker image at build time (/opt/dbt/packages, airflow/Dockerfile). After adding or changing a
+# package here, run `docker compose build` (the dbt_deps task also reinstalls when this file changed).
+# Commit package-lock.yml together with this file. Locally, `dbt deps` installs into dbt/dbt_packages/ (gitignored).
+packages:
+  - package: dbt-labs/dbt_utils
+    version: [">=1.4.0", "<1.5.0"]   # tested with 1.4.1

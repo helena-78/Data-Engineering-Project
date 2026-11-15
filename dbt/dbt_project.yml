@@ -1,0 +1,48 @@
+# dbt project for the Estonian Company Performance Observatory.
+# Layers are ClickHouse databases: bronze (raw, loaded by Airflow, read via sources),
+# silver (cleaned, Gabriel) and gold (star schema, Kristjan + Gabriel).
+# macros/generate_schema_name.sql makes "+schema: silver" mean database "silver" (not "gold_silver").
+name: observatory
+version: "0.1.0"
+config-version: 2
+require-dbt-version: [">=1.8.0", "<2.0.0"]
+
+profile: observatory
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+analysis-paths: ["analyses"]
+
+target-path: target
+# In Docker the packages live in the image (/opt/dbt/packages, see airflow/Dockerfile), not in the
+# bind-mounted ./dbt folder. Locally (no env var) they go to dbt/dbt_packages as usual.
+packages-install-path: "{{ env_var('DBT_PACKAGES_INSTALL_PATH', 'dbt_packages') }}"
+clean-targets: [target, logs]
+
+models:
+  observatory:
+    silver:
+      +schema: silver
+      +materialized: table
+    gold:
+      +schema: gold
+      +materialized: table
+
+seeds:
+  observatory:
+    +schema: gold          # e.g. dim_size_band.csv -> gold.dim_size_band
+
+snapshots:
+  observatory:
+    +schema: gold          # e.g. snap_company -> gold.snap_company (input of dim_company)
+
+tests:
+  observatory:
+    +severity: error
+
+vars:
+  # Literal natural key used for the unknown member of every dimension (docs/surrogate_keys.md).
+  unknown_natural_key: "UNKNOWN"

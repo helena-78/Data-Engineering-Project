@@ -1,0 +1,11 @@
+# Normalise text files to LF so shell commands and Dockerfiles work when the repo is checked out on Windows.
+* text=auto eol=lf
+
+# RIK data files: keep the original bytes (CRLF line ends, UTF-8) exactly as delivered.
+*.csv -text
+*bundle*.txt -text
+tests/fixtures/*.txt -text
+*.zip binary
+
+# Windows batch files need CRLF
+*.cmd text eol=crlf

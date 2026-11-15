@@ -1,0 +1,28 @@
+# Bronze tables loaded by Airflow (scripts/load_bronze.py / Olena's ingestion DAGs).
+# Column list and original RIK headers: docs/bronze_tables.md and scripts/bronze_schema.py.
+# All columns are String. Tables are ReplacingMergeTree(_loaded_at): in silver, read them with FINAL,
+# e.g.  select ... from {{ source('bronze', 'rik_report_general') }} final
+# Only two smoke tests live here; the data-quality tests are Melih's.
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze            # ClickHouse database
+    description: Raw RIK open-data files, one table per file type, all columns String.
+    tables:
+      - name: rik_report_general
+        description: "1.aruannete_yldandmed: one row per annual report (no company name in this file)."
+        columns:
+          - name: report_id
+            data_tests:
+              - not_null
+      - name: rik_report_elements
+        description: "4.<year>_aruannete_elemendid: long format, one row per report x tabel x element; partitioned by report_year."
+      - name: rik_report_emtak_revenue
+        description: "2.EMTAK_myygitulu: revenue split by EMTAK code per report."
+      - name: rik_company_basic
+        description: "ettevotja_rekvisiidid__lihtandmed: one row per company, current state only (name, legal form, address)."
+        columns:
+          - name: ariregistri_kood
+            data_tests:
+              - not_null
