@@ -11,6 +11,8 @@
   silver.silver_company_year. Measures are EUR as Nullable(Float64); NULL = not reported; ratios are not stored.
 
   Keys only through the project macros (docs/surrogate_keys.md, dbt/macros/surrogate_keys.sql).
+  company_key: ASOF LEFT JOIN on the snap_company versions (company_versions macro), version valid at period_end.
+  industry_key: taken from silver_report_main_activity (Kristjan). No match on either -> unknown member.
 
   Incremental: insert_overwrite replaces whole year partitions (ALTER TABLE ... REPLACE PARTITION).
   An incremental run rebuilds only the years in RIK_YEARS; other year partitions are left as they are.
@@ -20,37 +22,48 @@
 {%- set rik_years = env_var('RIK_YEARS', '2022,2023,2024,2025').split(',') | map('trim') | reject('equalto', '') | list -%}
 
 with company_years as (
-    select *
+    select
+        *,
+        {{ company_id('registry_code') }} as company_id,
+        toDateTime64(period_end, 6, 'UTC') as period_end_ts
     from {{ ref('silver_company_year') }}
     {% if is_incremental() %}
     where year in ({{ rik_years | join(', ') }})
     {% endif %}
+),
+
+-- SCD2 versions of each company, from the snapshot through the same macro as dim_company.
+versions as (
+    select company_id, company_key, lookup_from
+    from {{ company_versions(ref('snap_company')) }}
 )
 
 select
-    {{ company_year_key('registry_code', 'year') }} as company_year_key,
-    {{ company_id('registry_code') }} as company_id,
-    registry_code,
-    cast(year as UInt16) as year,
-    report_id,
-    -- TODO(Kristjan: snap_company / dim_company): replace the placeholder with the contract snippet in
-    --   docs/surrogate_keys.md ("Fact"): versions = company_versions(ref('snap_company')), then
-    --   ASOF LEFT JOIN versions on company_id and toDateTime64(period_end, 6, 'UTC') >= lookup_from,
-    --   if(v.company_key = '', unknown_company_key(), v.company_key).
-    {{ unknown_company_key() }} as company_key,
-    {{ year_key('year') }} as year_key,
-    -- TODO(Kristjan: dim_industry + EMTAK code -> section mapping): replace the placeholder with
-    --   industry_key(section_code, emtak_version) (docs/surrogate_keys.md), section_code looked up from
-    --   emtak_code + emtak_version; no EMTAK row or no match -> industry_key('NULL', 'NULL').
-    {{ industry_key('NULL', 'NULL') }} as industry_key,
-    {{ size_band_key(size_band_code('avg_fte')) }} as size_band_key,
-    cast(revenue as Nullable(Float64)) as revenue,
-    cast(operating_profit as Nullable(Float64)) as operating_profit,
-    cast(assets as Nullable(Float64)) as assets,
-    cast(equity as Nullable(Float64)) as equity,
-    cast(cash as Nullable(Float64)) as cash,
-    cast(current_assets as Nullable(Float64)) as current_assets,
-    cast(current_liabilities as Nullable(Float64)) as current_liabilities,
-    cast(employee_expense as Nullable(Float64)) as employee_expense,
-    cast(avg_fte as Nullable(Float64)) as avg_fte
-from company_years
+    {{ company_year_key('cy.registry_code', 'cy.year') }} as company_year_key,
+    cy.company_id as company_id,
+    cy.registry_code as registry_code,
+    cast(cy.year as UInt16) as year,
+    cy.report_id as report_id,
+    -- Company version valid at period_end (latest version with lookup_from <= period_end).
+    -- No match: ClickHouse fills the String with '' -> unknown member.
+    if(v.company_key = '', {{ unknown_company_key() }}, v.company_key) as company_key,
+    {{ year_key('cy.year') }} as year_key,
+    -- Industry of the main activity, computed in silver_report_main_activity (not recomputed here).
+    -- No EMTAK row for the report: '' -> unknown member.
+    if(m.industry_key = '', {{ industry_key('NULL', 'NULL') }}, m.industry_key) as industry_key,
+    {{ size_band_key(size_band_code('cy.avg_fte')) }} as size_band_key,
+    cast(cy.revenue as Nullable(Float64)) as revenue,
+    cast(cy.operating_profit as Nullable(Float64)) as operating_profit,
+    cast(cy.assets as Nullable(Float64)) as assets,
+    cast(cy.equity as Nullable(Float64)) as equity,
+    cast(cy.cash as Nullable(Float64)) as cash,
+    cast(cy.current_assets as Nullable(Float64)) as current_assets,
+    cast(cy.current_liabilities as Nullable(Float64)) as current_liabilities,
+    cast(cy.employee_expense as Nullable(Float64)) as employee_expense,
+    cast(cy.avg_fte as Nullable(Float64)) as avg_fte
+from company_years as cy
+asof left join versions as v
+    on v.company_id = cy.company_id
+   and cy.period_end_ts >= v.lookup_from
+left join {{ ref('silver_report_main_activity') }} as m
+    on m.report_id = cy.report_id

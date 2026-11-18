@@ -2,11 +2,10 @@
           query_settings={'join_use_nulls': 1}) }}
 
 {#-
-  One row per annual report (bronze.rik_report_general), typed, with its measures and main EMTAK activity.
+  One row per annual report (bronze.rik_report_general), typed, with its measures.
 
   * year = aruandeaasta (the report year as filed), not the year of period_end.
-  * Main EMTAK activity (bronze.rik_report_emtak_revenue): the pohitegevusala = 'jah' row; otherwise the
-    row with the highest jaotatud_myygitulu, ties by lowest code; no rows -> NULL (UNKNOWN in gold).
+  * The main EMTAK activity is not here: it is Kristjan's silver_report_main_activity, joined in the fact.
   * is_in_scope: legal form in OÜ, AS, TÜH, UÜ, TÜ; not consolidated; year 2022 to 2025.
     The bronze files have no currency column, so there is no currency condition.
     staatus is not filtered on; taidetud_aruanne_report_id is ignored.
@@ -24,27 +23,6 @@ with general as (
         trimBoth(kas_konsolideeritud) as kas_konsolideeritud,
         toUInt16OrNull(trimBoth(aruandeaasta)) as year
     from {{ source('bronze', 'rik_report_general') }} final
-),
-
-emtak_ranked as (
-    select
-        report_id,
-        nullIf(trimBoth(emtak), '') as emtak_code,
-        nullIf(trimBoth(emtak_version), '') as emtak_version,
-        row_number() over (
-            partition by report_id
-            order by
-                lower(trimBoth(pohitegevusala)) = 'jah' desc,
-                toFloat64OrNull(trimBoth(jaotatud_myygitulu)) desc nulls last,
-                trimBoth(emtak) asc
-        ) as rn
-    from {{ source('bronze', 'rik_report_emtak_revenue') }} final
-),
-
-main_emtak as (
-    select report_id, emtak_code, emtak_version
-    from emtak_ranked
-    where rn = 1
 )
 
 select
@@ -57,8 +35,6 @@ select
     g.esitatud_kpv as esitatud_kpv,
     g.kas_konsolideeritud as kas_konsolideeritud,
     g.year as year,
-    e.emtak_code as emtak_code,
-    e.emtak_version as emtak_version,
     i.revenue as revenue,
     i.operating_profit as operating_profit,
     i.assets as assets,
@@ -75,5 +51,4 @@ select
         and coalesce(g.year between 2022 and 2025, false)
     ) as is_in_scope
 from general as g
-left join main_emtak as e on e.report_id = g.report_id
 left join {{ ref('silver_report_indicators') }} as i on i.report_id = g.report_id

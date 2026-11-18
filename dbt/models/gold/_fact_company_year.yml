@@ -11,8 +11,8 @@ models:
       Amounts are EUR as filed, Nullable(Float64); NULL = not reported (never replaced by 0). Ratios
       (margins, growth, revenue per employee) are not stored; they are computed in the queries.
       Incremental (insert_overwrite by year partition): an incremental run rebuilds the years in RIK_YEARS.
-      company_key and industry_key are placeholders (the unknown members) until Kristjan's snapshot and
-      dimensions exist.
+      company_key and industry_key point to the unknown members when there is no matching company
+      version or main activity. Key-to-dimension checks: Melih's assert_fact_keys_match_dimensions.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -37,18 +37,19 @@ models:
         data_tests: [not_null]
       - name: company_key
         description: >
-          Key to dim_company (SCD2 version valid at period_end). PLACEHOLDER: currently always
-          unknown_company_key() (md5('UNKNOWN-UNKNOWN')) until snap_company exists; then the
-          company_versions + ASOF LEFT JOIN snippet of docs/surrogate_keys.md replaces it.
+          Key to dim_company: the SCD2 version valid at period_end, found with an ASOF LEFT JOIN on
+          company_id against company_versions(ref('snap_company')) (latest version with lookup_from <=
+          period_end; the first version of each company is valid from 1900-01-01). Unknown member
+          unknown_company_key() when the company is not in snap_company (e.g. missing from the basic-data file).
         data_tests: [not_null]
       - name: year_key
         description: Key to dim_year, year_key(year) = md5 of the 4-digit year.
         data_tests: [not_null]
       - name: industry_key
         description: >
-          Key to dim_industry, industry_key(section_code, emtak_version). PLACEHOLDER: currently always the
-          unknown member industry_key('NULL', 'NULL') (md5('UNKNOWN-UNKNOWN')) until the EMTAK code ->
-          section mapping exists.
+          Key to dim_industry, taken from silver_report_main_activity (main EMTAK activity of the report,
+          section and EMTAK version); not recomputed here. Unknown member industry_key('NULL', 'NULL')
+          when the report has no EMTAK rows.
         data_tests: [not_null]
       - name: size_band_key
         description: >

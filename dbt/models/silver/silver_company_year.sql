@@ -29,8 +29,6 @@ select
     esitatud_kpv,
     kas_konsolideeritud,
     cast(assumeNotNull(year) as UInt16) as year,   -- not NULL: is_in_scope requires year 2022 to 2025
-    emtak_code,
-    emtak_version,
     revenue,
     operating_profit,
     assets,
