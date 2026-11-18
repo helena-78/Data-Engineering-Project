@@ -1,0 +1,157 @@
+# Silver layer (Gabriel): cleaned, typed RIK annual reports. Database `silver`, tables rebuilt on every run.
+# Sources are read with FINAL (ReplacingMergeTree in bronze). Amounts are EUR, Decimal as in the Project 1 DDL
+# (sql/project1_postgres/ddl/01_create_star_schema.sql); NULL = not reported (never 0).
+version: 2
+
+models:
+  - name: silver_report_indicators
+    description: >
+      One row per report_id: the 9 measures pivoted from bronze.rik_report_elements. Only these statement
+      tables are read, in this priority order: income statement 'Kasumiaruanne skeem 1' (1), 'Kasumiaruanne
+      skeem 2' (2); balance sheet 'Bilanss' (1), 'Bilanss, detailne' (2), 'Bilanss, kasvava likviidsuse
+      järjekorras' (3); labour note 'Lisa: Tööjõukulud'. Consolidated / Konsolideerimata, Tulemiaruanne
+      (non-profits), liquidation (Likvideerimise*, Lõppbilanss) and cash-flow tables and the PDF placeholder
+      rows (empty elemendi_nimetus) are never used. Reports with none of these tables have no row here.
+    columns:
+      - name: report_id
+        description: RIK annual report id (text, as in bronze).
+        data_tests: [unique, not_null]
+      - name: revenue
+        description: "Müügitulu (`Revenue`), income statement skeem 1, else skeem 2. EUR, Decimal(18,2)."
+      - name: operating_profit
+        description: "Ärikasum (kahjum) (`TotalProfitLoss`), income statement skeem 1, else skeem 2; never the cash-flow table. EUR, Decimal(18,2)."
+      - name: assets
+        description: "Varad (`Assets`), balance sheet by priority. EUR, Decimal(18,2)."
+      - name: equity
+        description: "Omakapital (`Equity`), balance sheet by priority. EUR, Decimal(18,2)."
+      - name: cash
+        description: "Raha (`CashAndCashEquivalents`), balance sheet by priority. EUR, Decimal(18,2)."
+      - name: current_assets
+        description: "Käibevarad (`CurrentAssets`), balance sheet by priority. EUR, Decimal(18,2)."
+      - name: current_liabilities
+        description: "Lühiajalised kohustised (`CurrentLiabilities`), balance sheet by priority. EUR, Decimal(18,2)."
+      - name: employee_expense
+        description: >
+          Tööjõukulud, stored positive: abs(`LaborExpense`) from 'Lisa: Tööjõukulud'; if missing,
+          abs(-1 * `EmployeeExpense`) from the income statement (filed negative). abs() on both because
+          LaborExpense is filed negative in some reports. EUR, Decimal(18,2).
+      - name: avg_fte
+        description: "Töötajate keskmine arv taandatuna täistööajale (`AverageNumberOfEmployeesInFullTimeEquivalentUnits`), 'Lisa: Tööjõukulud'. Decimal(10,2)."
+      - name: has_financials
+        description: 1 if at least one of the 9 measures is not NULL, else 0.
+
+  - name: silver_report
+    description: >
+      One row per annual report in bronze.rik_report_general (all reports, also out of scope), typed, with
+      the measures of silver_report_indicators (left join: NULL when the report has no allowlisted table)
+      and the main EMTAK activity. is_in_scope marks the reports the gold layer uses.
+    columns:
+      - name: report_id
+        description: RIK annual report id.
+        data_tests: [unique, not_null]
+      - name: registry_code
+        description: Estonian registry code (registrikood), 8 digits as text.
+      - name: legal_form
+        description: Legal form abbreviation as filed (õiguslik vorm), e.g. OÜ, AS, MTÜ.
+      - name: staatus
+        description: Company status at the time of the file (not filtered on).
+      - name: period_start
+        description: Start of the reporting period (Date, parsed from dd.mm.yyyy).
+      - name: period_end
+        description: End of the reporting period (Date, parsed from dd.mm.yyyy).
+      - name: esitatud_kpv
+        description: Submission date of the report (Date, parsed from dd.mm.yyyy).
+      - name: kas_konsolideeritud
+        description: "'Jah' = consolidated report, 'Ei' = not consolidated, as filed."
+      - name: year
+        description: Report year = aruandeaasta (UInt16). Not the year of period_end (they differ for non-calendar fiscal years).
+      - name: emtak_code
+        description: >
+          Main EMTAK activity code (text, leading zeros kept): the pohitegevusala = 'jah' row of
+          rik_report_emtak_revenue; else the highest jaotatud_myygitulu, ties by lowest code; NULL if the
+          report has no EMTAK rows (UNKNOWN industry in gold).
+      - name: emtak_version
+        description: EMTAK classification version of emtak_code, e.g. 'EMTAK 2008', 'EMTAK 2025'.
+      - name: revenue
+        description: See silver_report_indicators. EUR; NULL = not reported.
+      - name: operating_profit
+        description: See silver_report_indicators. EUR; NULL = not reported.
+      - name: assets
+        description: See silver_report_indicators. EUR; NULL = not reported.
+      - name: equity
+        description: See silver_report_indicators. EUR; NULL = not reported.
+      - name: cash
+        description: See silver_report_indicators. EUR; NULL = not reported.
+      - name: current_assets
+        description: See silver_report_indicators. EUR; NULL = not reported.
+      - name: current_liabilities
+        description: See silver_report_indicators. EUR; NULL = not reported.
+      - name: employee_expense
+        description: See silver_report_indicators (positive). EUR; NULL = not reported.
+      - name: avg_fte
+        description: See silver_report_indicators. NULL = not reported.
+      - name: has_financials
+        description: 1 if at least one measure is not NULL, else 0 (also 0 when the report has no allowlisted table).
+      - name: is_in_scope
+        description: >
+          1 if legal_form in (OÜ, AS, TÜH, UÜ, TÜ) and kas_konsolideeritud = 'Ei' and year between 2022 and
+          2025, else 0. No currency condition: the RIK files have no currency column. staatus is not used.
+
+  - name: silver_company_year
+    description: >
+      One row per company (registry_code) and year (aruandeaasta), from the in-scope reports of
+      silver_report. When a company has several in-scope reports for one year, the report is chosen by
+      has_financials desc, esitatud_kpv desc, report_id desc (numeric). Input of gold.fact_company_year.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [registry_code, year]
+    columns:
+      - name: report_id
+        description: The selected report.
+      - name: registry_code
+        description: Estonian registry code (registrikood).
+        data_tests: [not_null]
+      - name: year
+        description: Report year = aruandeaasta (UInt16, 2022 to 2025).
+        data_tests: [not_null]
+      - name: n_candidate_reports
+        description: Number of in-scope reports the company had for this year (1 = no choice was needed).
+      - name: legal_form
+        description: As in silver_report.
+      - name: staatus
+        description: As in silver_report.
+      - name: period_start
+        description: As in silver_report.
+      - name: period_end
+        description: As in silver_report.
+      - name: esitatud_kpv
+        description: As in silver_report.
+      - name: kas_konsolideeritud
+        description: As in silver_report (always 'Ei' here).
+      - name: emtak_code
+        description: As in silver_report.
+      - name: emtak_version
+        description: As in silver_report.
+      - name: revenue
+        description: As in silver_report. EUR; NULL = not reported.
+      - name: operating_profit
+        description: As in silver_report. EUR; NULL = not reported.
+      - name: assets
+        description: As in silver_report. EUR; NULL = not reported.
+      - name: equity
+        description: As in silver_report. EUR; NULL = not reported.
+      - name: cash
+        description: As in silver_report. EUR; NULL = not reported.
+      - name: current_assets
+        description: As in silver_report. EUR; NULL = not reported.
+      - name: current_liabilities
+        description: As in silver_report. EUR; NULL = not reported.
+      - name: employee_expense
+        description: As in silver_report (positive). EUR; NULL = not reported.
+      - name: avg_fte
+        description: As in silver_report. NULL = not reported.
+      - name: has_financials
+        description: As in silver_report.
+      - name: is_in_scope
+        description: Always 1 here.
