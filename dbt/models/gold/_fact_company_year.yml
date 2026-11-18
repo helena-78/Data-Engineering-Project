@@ -1,0 +1,76 @@
+# Gold fact (Gabriel). Database `gold`. Dimensions are Kristjan's and are documented in his own YAML.
+# Keys follow docs/surrogate_keys.md (project macros only).
+# Melih's singular tests in dbt/tests/gold and dbt/tests/cross_layer also cover this model; they are not repeated here.
+version: 2
+
+models:
+  - name: fact_company_year
+    description: >
+      Grain: one row per company (registry_code) per year (aruandeaasta), from the single annual report
+      chosen in silver.silver_company_year (in-scope legal forms, not consolidated, 2022 to 2025).
+      Amounts are EUR as filed, Nullable(Float64); NULL = not reported (never replaced by 0). Ratios
+      (margins, growth, revenue per employee) are not stored; they are computed in the queries.
+      Incremental (insert_overwrite by year partition): an incremental run rebuilds the years in RIK_YEARS.
+      company_key and industry_key point to the unknown members when there is no matching company
+      version or main activity. Key-to-dimension checks: Melih's assert_fact_keys_match_dimensions.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [registry_code, year]
+    columns:
+      - name: company_year_key
+        description: Surrogate key of the grain, company_year_key(registry_code, year) = md5 of registry code and 4-digit year.
+        data_tests: [unique, not_null]
+      - name: company_id
+        description: >
+          Durable company key, company_id(registry_code) = md5 of the registry code; the same for all SCD2
+          versions of the company. Use it to compare a company across years.
+        data_tests: [not_null]
+      - name: registry_code
+        description: Estonian registry code (registrikood) of the company.
+        data_tests: [not_null]
+      - name: year
+        description: Report year (aruandeaasta), UInt16; also the partition key.
+        data_tests: [not_null]
+      - name: report_id
+        description: The RIK annual report the row comes from (degenerate dimension, lineage to bronze).
+        data_tests: [not_null]
+      - name: company_key
+        description: >
+          Key to dim_company: the SCD2 version valid at period_end, found with an ASOF LEFT JOIN on
+          company_id against company_versions(ref('snap_company')) (latest version with lookup_from <=
+          period_end; the first version of each company is valid from 1900-01-01). Unknown member
+          unknown_company_key() when the company is not in snap_company (e.g. missing from the basic-data file).
+        data_tests: [not_null]
+      - name: year_key
+        description: Key to dim_year, year_key(year) = md5 of the 4-digit year.
+        data_tests: [not_null]
+      - name: industry_key
+        description: >
+          Key to dim_industry, taken from silver_report_main_activity (main EMTAK activity of the report,
+          section and EMTAK version); not recomputed here. Unknown member industry_key('NULL', 'NULL')
+          when the report has no EMTAK rows.
+        data_tests: [not_null]
+      - name: size_band_key
+        description: >
+          Key to dim_size_band, size_band_key(size_band_code(avg_fte)): micro < 10, small 10 to < 50,
+          medium 50 to < 250, large 250+, unknown when avg_fte is NULL.
+        data_tests: [not_null]
+      - name: revenue
+        description: Müügitulu (Revenue). EUR; NULL = not reported.
+      - name: operating_profit
+        description: Ärikasum (kahjum) (TotalProfitLoss), negative for a loss. EUR; NULL = not reported.
+      - name: assets
+        description: Varad (total assets). EUR; NULL = not reported.
+      - name: equity
+        description: Omakapital. EUR; NULL = not reported.
+      - name: cash
+        description: Raha (cash and cash equivalents). EUR; NULL = not reported.
+      - name: current_assets
+        description: Käibevarad. EUR; NULL = not reported.
+      - name: current_liabilities
+        description: Lühiajalised kohustised. EUR; NULL = not reported.
+      - name: employee_expense
+        description: Tööjõukulud, always positive. EUR; NULL = not reported.
+      - name: avg_fte
+        description: Average number of employees in full-time equivalents; NULL = not reported.
