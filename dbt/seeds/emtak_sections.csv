@@ -1,0 +1,44 @@
+emtak_version,section_code,section_name,division_from,division_to
+EMTAK 2008,A,"Agriculture, forestry and fishing",1,3
+EMTAK 2008,B,Mining and quarrying,5,9
+EMTAK 2008,C,Manufacturing,10,33
+EMTAK 2008,D,"Electricity, gas, steam and air conditioning supply",35,35
+EMTAK 2008,E,"Water supply; sewerage, waste management and remediation activities",36,39
+EMTAK 2008,F,Construction,41,43
+EMTAK 2008,G,Wholesale and retail trade; repair of motor vehicles and motorcycles,45,47
+EMTAK 2008,H,Transportation and storage,49,53
+EMTAK 2008,I,Accommodation and food service activities,55,56
+EMTAK 2008,J,Information and communication,58,63
+EMTAK 2008,K,Financial and insurance activities,64,66
+EMTAK 2008,L,Real estate activities,68,68
+EMTAK 2008,M,"Professional, scientific and technical activities",69,75
+EMTAK 2008,N,Administrative and support service activities,77,82
+EMTAK 2008,O,Public administration and defence; compulsory social security,84,84
+EMTAK 2008,P,Education,85,85
+EMTAK 2008,Q,Human health and social work activities,86,88
+EMTAK 2008,R,"Arts, entertainment and recreation",90,93
+EMTAK 2008,S,Other service activities,94,96
+EMTAK 2008,T,Activities of households as employers and for own use,97,98
+EMTAK 2008,U,Activities of extraterritorial organisations and bodies,99,99
+EMTAK 2025,A,"Agriculture, forestry and fishing",1,3
+EMTAK 2025,B,Mining and quarrying,5,9
+EMTAK 2025,C,Manufacturing,10,33
+EMTAK 2025,D,"Electricity, gas, steam and air conditioning supply",35,35
+EMTAK 2025,E,"Water supply; sewerage, waste management and remediation activities",36,39
+EMTAK 2025,F,Construction,41,43
+EMTAK 2025,G,Wholesale and retail trade,46,47
+EMTAK 2025,H,Transportation and storage,49,53
+EMTAK 2025,I,Accommodation and food service activities,55,56
+EMTAK 2025,J,"Publishing, broadcasting, and content production and distribution activities",58,60
+EMTAK 2025,K,"Telecommunication, computer programming, consulting, computing infrastructure and other information service activities",61,63
+EMTAK 2025,L,Financial and insurance activities,64,66
+EMTAK 2025,M,Real estate activities,68,68
+EMTAK 2025,N,"Professional, scientific and technical activities",69,75
+EMTAK 2025,O,Administrative and support service activities,77,82
+EMTAK 2025,P,Public administration and defence; compulsory social security,84,84
+EMTAK 2025,Q,Education,85,85
+EMTAK 2025,R,Human health and social work activities,86,88
+EMTAK 2025,S,"Arts, sports and recreation",90,93
+EMTAK 2025,T,Other service activities,94,96
+EMTAK 2025,U,Activities of households as employers and for own use,97,98
+EMTAK 2025,V,Activities of extraterritorial organisations and bodies,99,99

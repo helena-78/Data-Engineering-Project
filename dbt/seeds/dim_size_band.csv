@@ -1,0 +1,6 @@
+size_band_key,band_code,band_label,sort_order
+1c21d9b19298645fa2534d9828ee0778,micro,Micro (<10),1
+eb5c1399a871211c7e7ed732d15e3a8b,small,Small (10-49),2
+075a3e36a0a52dcbc568c05788e8a713,medium,Medium (50-249),3
+afacdb0a401ccdf6b48551bbc00e8a74,large,Large (250+),4
+ad921d60486366258809553a3db49a4a,unknown,Unknown,99

@@ -1,0 +1,42 @@
+version: 2
+
+seeds:
+  - name: dim_size_band
+    description: >
+      Employee size band dimension (Type 1, static seed). Band from average FTE employees via the macro
+      size_band_code(): micro < 10, small 10-49, medium 50-249, large 250+, unknown when FTE is missing.
+      size_band_key = md5(band_code), checked against the macro by assert_dim_size_band_keys_match_macro.
+    config:
+      column_types: {size_band_key: String, band_code: String, band_label: String, sort_order: UInt8}
+    columns:
+      - name: size_band_key
+        description: Surrogate key, md5(band_code). Primary key.
+        data_tests: [unique, not_null]
+      - name: band_code
+        description: Natural key, lower case.
+        data_tests:
+          - unique
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['micro', 'small', 'medium', 'large', 'unknown']
+      - name: band_label
+        description: Label shown in reports, e.g. "Small (10-49)".
+        data_tests: [not_null]
+      - name: sort_order
+        description: Display order of the bands (unknown last).
+        data_tests: [unique, not_null]
+
+  - name: emtak_sections
+    description: >
+      Reference data: EMTAK sections per EMTAK version with their division range (first two digits of
+      the code). Source: EMTAK 2008 = NACE Rev. 2, EMTAK 2025 = NACE Rev. 2.1. Input of dim_industry
+      and silver_report_main_activity, so it lives in silver.
+    config:
+      schema: silver
+      column_types: {emtak_version: String, section_code: String, section_name: String,
+                     division_from: UInt8, division_to: UInt8}
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [emtak_version, section_code]

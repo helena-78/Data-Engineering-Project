@@ -1,0 +1,15 @@
+# Data model changes since Project 1 (Kristjan)
+
+The grain and the star layout are unchanged: `fact_company_year` holds one row per company and calendar year, with company, year, industry and size-band dimensions. The changes come from the source data and from ClickHouse.
+
+**Keys.** Besides the hash keys described in the architecture section, every dimension now has an `UNKNOWN` member, so fact rows with a missing natural key (a company deleted from the register, a report without EMTAK rows or without employee data) still join and are not lost in inner joins.
+
+**dim_company.** It is still SCD Type 2, now built with a dbt snapshot (`check` strategy on name, legal form and county), because the RIK basic-data file holds the current state only. History therefore starts with the first snapshot run; the first version of each company is used for all earlier reports. A durable `company_id` was added next to the version key `company_key`, so year-over-year queries follow a company across versions. The annual-report file has no company name, contrary to the Project 1 assumption, so names come from the basic-data file. `legal_type` was renamed `legal_form`, and the current version has `valid_to = NULL` instead of 9999-12-31.
+
+**dim_industry.** The natural key stays (section, EMTAK version), but the data showed why the version is needed: reports for 2022–2023 use EMTAK 2008, reports for 2024–2025 use EMTAK 2025 (NACE Rev. 2.1), which has 22 sections (A–V) and shifted letters after splitting the old section J. In the sample, the 50 reports in EMTAK 2008 section J (Information and communication) correspond to EMTAK 2025 sections J (5) and K (52), and financial activities move from K to L. A new silver model (`silver_report_main_activity`) selects each report's main activity with the rule planned in Project 1 (highest allocated revenue, ties broken by code); in the sample this differs from the activity RIK marks as main for only 2 of 1,412 reports. A seed (`emtak_sections`) maps EMTAK divisions to sections. The business questions use the 2025 industry only, so no comparison mixes the two versions.
+
+**dim_year and dim_size_band.** `dim_year` is generated from the configured report years (`RIK_YEARS`). `dim_size_band` is a dbt seed with a natural key `band_code` (micro, small, medium, large, unknown); the band is derived from average FTE employees, so reports without employee data get the unknown band instead of being dropped.
+
+**Tests.** Each dimension has `unique` and `not_null` tests on its keys, accepted-value tests on codes and versions, and the main-activity model has a `relationships` test to `dim_industry`; a singular test checks that the hand-typed size-band keys match the key macro. Melih's dimension tests (SCD2 validity, unknown members, size-band codes) also pass on the sample.
+
+Code: `dbt/snapshots/snap_company.sql`, `dbt/models/gold/dim_*.sql`, `dbt/models/silver/silver_report_main_activity.sql`, `dbt/seeds/`. Documentation and tests: `dbt/models/gold/_gold__dimensions.yml`, `dbt/models/silver/_silver__main_activity.yml`, `dbt/seeds/_seeds.yml`.
