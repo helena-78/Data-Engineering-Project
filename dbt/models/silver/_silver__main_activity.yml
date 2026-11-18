@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: silver_report_main_activity
+    description: >
+      Main activity of each annual report (= company-year), as planned in Project 1: the EMTAK activity
+      with the highest allocated revenue, ties broken by the lowest code. Gives section_code and
+      industry_key for fact_company_year.
+    columns:
+      - name: report_id
+        description: Annual report id, one row per report.
+        data_tests: [unique, not_null]
+      - name: emtak_code
+        description: Main EMTAK code (4 or 5 digits as text).
+      - name: emtak_version
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['EMTAK 2008', 'EMTAK 2025']
+              config: {severity: warn}
+      - name: section_code
+        description: Section letter from emtak_sections; NULL if the division is not in the seed.
+        data_tests:
+          - not_null:
+              config: {severity: warn}
+      - name: allocated_revenue
+        description: Revenue allocated to the selected activity (Jaotatud müügitulu), EUR.
+      - name: is_declared_main
+        description: true if the selected activity is also the one RIK marks as main (pohitegevusala = 'jah').
+      - name: industry_key
+        description: Key into dim_industry (unknown member when the section is not found).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_industry'), field: industry_key}

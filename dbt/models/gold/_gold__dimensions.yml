@@ -1,0 +1,78 @@
+version: 2
+
+models:
+  - name: dim_company
+    description: >
+      Company dimension, SCD Type 2: one row per version of a company. Built from the snapshot
+      snap_company through the macro company_versions(). History starts with the first snapshot run,
+      because the RIK basic-data file holds the current state only. Includes the unknown member
+      (registry_code 'UNKNOWN') for reports of companies missing from that file.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [registry_code, valid_from]
+    columns:
+      - name: company_key
+        description: Surrogate key of one version, md5(registry_code, dbt_valid_from). Primary key.
+        data_tests: [unique, not_null]
+      - name: company_id
+        description: Durable key, md5(registry_code), the same for all versions; also stored in the fact.
+        data_tests: [not_null]
+      - name: registry_code
+        description: Natural key, Estonian registry code (8 digits).
+        data_tests: [not_null]
+      - name: company_name
+        description: Company name (tracked, SCD2).
+        data_tests: [not_null]
+      - name: legal_form
+        description: Legal form, e.g. Osaühing (tracked, SCD2). Called legal_type in Project 1.
+      - name: county
+        description: County, last part of the EHAK address text, e.g. "Harju maakond" (tracked, SCD2).
+      - name: valid_from
+        description: Start of this version (snapshot dbt_valid_from, UTC).
+        data_tests: [not_null]
+      - name: valid_to
+        description: End of this version; NULL for the current version.
+      - name: is_current
+        description: true for the current version.
+        data_tests: [not_null]
+
+  - name: dim_industry
+    description: >
+      Industry dimension (Type 1, static): one row per EMTAK section and EMTAK version, plus the unknown
+      member. Each fact row gets the section of the report's main activity (silver_report_main_activity).
+      Section letters are not comparable across versions (EMTAK 2025 split old J into J and K).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [section_code, emtak_version]
+    columns:
+      - name: industry_key
+        description: Surrogate key, md5(section_code, emtak_version). Primary key.
+        data_tests: [unique, not_null]
+      - name: section_code
+        description: EMTAK section letter (A to U in EMTAK 2008, A to V in EMTAK 2025) or UNKNOWN.
+        data_tests: [not_null]
+      - name: section_name
+        description: Section name in English.
+        data_tests: [not_null]
+      - name: emtak_version
+        description: Classification version.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['EMTAK 2008', 'EMTAK 2025', 'UNKNOWN']
+      - name: division_from
+        description: First division (two-digit code) of the section.
+      - name: division_to
+        description: Last division of the section.
+
+  - name: dim_year
+    description: Year dimension (static), one row per report year in RIK_YEARS plus the unknown member (year 0).
+    columns:
+      - name: year_key
+        description: Surrogate key, md5 of the 4-digit year. Primary key.
+        data_tests: [unique, not_null]
+      - name: year
+        description: Calendar year of the annual report (aruandeaasta).
+        data_tests: [unique, not_null]
